@@ -15,7 +15,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from saugykla import read_setting, restore_remote, save_remote, remote_configured
+from saugykla import read_setting, restore_remote, save_remote, remote_configured, SupabaseConnectionError
 
 from grafiko_rodymas import month_annotations, group_month_entries
 from vaizdas import report_cards, debt_panel, plan_panel, fixed_staff_cards
@@ -53,15 +53,25 @@ def db_conn():
     finally:
         con.close()
     if changed and remote_configured():
-        save_remote(DB_PATH)
+        try:
+            save_remote(DB_PATH)
+        except SupabaseConnectionError:
+            # SQLite pakeista, bet nepatvirtinta, kad ją saugo Supabase.
+            st.session_state["supabase_unsynced"] = True
+            raise
+        else:
+            st.session_state["supabase_unsynced"] = False
 
 
 @st.cache_resource(show_spinner=False)
 def initialize_storage_once():
     """Vienąkart po debesijos perkrovimo atkuria patvarią duomenų kopiją."""
-    if remote_configured():
-        restore_remote(DB_PATH)
+    remote_exists = restore_remote(DB_PATH) if remote_configured() else False
     init_db()
+    if remote_configured() and not remote_exists:
+        # Pirmasis sėkmingas prijungimas: perkelia esamus SQLite įrašus
+        # į Supabase, net jeigu vietinė DB jau buvo sukurta anksčiau.
+        save_remote(DB_PATH)
     return True
 
 
@@ -1033,7 +1043,18 @@ def reports_page(year, month, employees, alloc, flags, absences, substitutions, 
 
 
 def main():
-    initialize_storage_once()
+    try:
+        initialize_storage_once()
+    except SupabaseConnectionError as err:
+        st.error("Nepavyko prisijungti prie Supabase. Duomenys nebuvo pakeisti.")
+        st.warning(str(err))
+        st.info("Patikrinkite Streamlit Secrets ir Supabase lentelę 'public.app_state'. "
+                "Šiuo metu įrašų redagavimas išjungtas, kad jie netyčia neišsisaugotų "
+                "tik laikinoje SQLite saugykloje.")
+        if st.button("🔄 Bandyti prisijungti dar kartą", type="primary"):
+            initialize_storage_once.clear()
+            st.rerun()
+        st.stop()
     role, secured = authorized_role()
     admin = role == "admin"
 
@@ -1086,19 +1107,45 @@ def main():
     st.markdown('<div style="height:11px"></div>', unsafe_allow_html=True)
     if not secured:
         st.warning("Vietinis demonstracinis režimas be slaptažodžių – neskelbkite viešai.")
-    if selected_page == "settings":
-        settings_page(employees, allocations, flags)
-    elif selected_page == "changes":
-        changes_page(year, month, employees, allocations, absences, substitutions,
-                     corrections, notes, temporary_increases)
-    elif selected_page == "report":
-        reports_page(year, month, employees, allocations, flags, absences,
-                     substitutions, corrections, notes, temporary_increases)
-    else:
-        dashboard_page(year, month, employees, allocations, flags, absences,
-                       substitutions, corrections, notes, temporary_increases)
+    if st.session_state.get("supabase_unsynced"):
+        st.error("Yra pakeitimų, kurie įrašyti tik į laikiną vietinę bazę, bet dar nenusiųsti į Supabase.")
+        if st.button("🔄 Pakartoti išsaugojimą Supabase", key="retry_remote_save"):
+            try:
+                save_remote(DB_PATH)
+                st.session_state["supabase_unsynced"] = False
+                st.success("Pakeitimai sėkmingai išsaugoti Supabase.")
+                st.rerun()
+            except SupabaseConnectionError as err:
+                st.warning(str(err))
+        st.stop()
+    try:
+        if selected_page == "settings":
+            settings_page(employees, allocations, flags)
+        elif selected_page == "changes":
+            changes_page(year, month, employees, allocations, absences, substitutions,
+                         corrections, notes, temporary_increases)
+        elif selected_page == "report":
+            reports_page(year, month, employees, allocations, flags, absences,
+                         substitutions, corrections, notes, temporary_increases)
+        else:
+            dashboard_page(year, month, employees, allocations, flags, absences,
+                           substitutions, corrections, notes, temporary_increases)
+    except SupabaseConnectionError as err:
+        st.error("Pakeitimas įrašytas tik laikinai. Supabase išsaugojimas nepavyko.")
+        st.warning(str(err))
+        st.info("NEPERKRAUKITE serverio ir neįveskite daugiau pakeitimų, kol "
+                "nepavyks pakartoti išsaugojimo į Supabase.")
+        if st.button("🔄 Pakartoti išsaugojimą Supabase", key="retry_after_failure"):
+            try:
+                save_remote(DB_PATH)
+                st.session_state["supabase_unsynced"] = False
+                st.success("Pakeitimai išsaugoti.")
+                st.rerun()
+            except SupabaseConnectionError as retry_error:
+                st.warning(str(retry_error))
+        st.stop()
     if remote_configured():
-        st.sidebar.caption("● Duomenys saugomi Supabase")
+        st.sidebar.caption("● Supabase prijungta (paleidimo patikra sėkminga)")
     else:
         st.sidebar.error("⚠ Duomenys tik vietinėje SQLite saugykloje – po perkrovimo gali dingti. Prijunkite Supabase.")
 
