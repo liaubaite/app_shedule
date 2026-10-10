@@ -1,0 +1,92 @@
+/* HTML demonstracijos paletė ir išdėstymas – Streamlit komponentams */
+:root {
+ --dg-navy:#16374c; --dg-navy-hover:#2e546b; --dg-blue:#197da2;
+ --dg-yellow:#c49144; --dg-bg:#f3f6f8; --dg-border:#e3eaf0;
+ --dg-text:#233b4b; --dg-muted:#647987; --dg-green:#16855f; --dg-red:#b84d54;
+}
+html, body, [data-testid="stApp"], [data-testid="stAppViewContainer"] { background:#f3f6f8 !important; color:#233b4b; }
+[data-testid="stHeader"] { background:transparent !important; }
+[data-testid="stMainBlockContainer"], .block-container { max-width:1550px; padding:2.1rem 2.35rem 3rem !important; }
+h1 { font-size:1.75rem !important; font-weight:760 !important; color:#233b4b !important; letter-spacing:-.5px !important; }
+h2, h3 { color:#233b4b !important; font-weight:710 !important; letter-spacing:-.2px; }
+h3 { font-size:1.1rem !important; }
+[data-testid="stCaptionContainer"] { color:#647987 !important; }
+/* Sidebar kaip HTML peržiūroje */
+[data-testid="stSidebar"] { background:#16374c !important; width:246px !important; color:#dae6ed !important; border:0 !important; }
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] { padding:19px 13px 26px !important; }
+[data-testid="stSidebar"] p, [data-testid="stSidebar"] label,
+[data-testid="stSidebar"] span, [data-testid="stSidebar"] small { color:#c4d5df; }
+[data-testid="stSidebar"] [role="radiogroup"] { gap:5px; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label {
+ border-radius:9px; padding:12px 12px !important; background:transparent;
+ margin:0; transition:background .12s; min-height:44px;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background:#274a60; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) { background:#2e546b; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) p { color:white !important; font-weight:690; }
+[data-testid="stSidebar"] [data-testid="stRadio"] [data-testid="stWidgetLabel"] { display:none; }
+[data-testid="stSidebar"] [data-testid="stRadio"] [data-testid="stMarkdownContainer"] p { font-size:14px; }
+[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label > div:first-child { gap:4px; }
+/* Šiame vizuale nereikia Streamlit radio apskritimų šoniniame meniu */
+[data-testid="stSidebar"] [data-testid="stRadio"] label [data-testid="stMarkdownContainer"] { margin:0; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label [data-testid="stRadioButton"] { display:none; }
+[data-testid="stSidebar"] .stButton button { border:1px solid #557287 !important; color:#f5f8fa !important; background:#24495f !important; }
+[data-testid="stSidebar"] .stButton button:hover { background:#2e546b !important; }
+.dg-brand { padding:3px 10px 24px; font-size:20px; line-height:1.16; color:#fff !important; font-weight:780; }
+.dg-brand small { display:block; font-size:12px; font-weight:450; color:#bfd4df; padding-top:10px; }
+.dg-side-foot {border-top:1px solid #406176; margin-top:30px; padding:15px 8px; color:#c4d5df; font-size:11px; line-height:1.65;}
+/* Kortelės, lentelės, laukeliai */
+[data-testid="stForm"], [data-testid="stVerticalBlockBorderWrapper"] > div[data-testid="stVerticalBlock"] {
+ background:#fff; border-radius:14px; }
+[data-testid="stForm"] { border:1px solid #e3eaf0 !important; padding:1.18rem 1.25rem !important; box-shadow:0 5px 13px #25475b07; }
+[data-testid="stMetric"] { border:1px solid #e3eaf0; border-radius:13px; background:white; padding:16px 18px; }
+[data-testid="stMetricValue"] { font-size:1.6rem !important; color:#233b4b; }
+[data-testid="stMetricLabel"] { color:#647987 !important; }
+[data-testid="stTabs"] [data-baseweb="tab-list"] { gap:8px; background:transparent; }
+[data-testid="stTabs"] button[data-baseweb="tab"] { background:#eef3f6; border-radius:9px 9px 0 0; color:#506e81; padding:11px 17px; }
+[data-testid="stTabs"] button[aria-selected="true"] { background:#daedf7; color:#146d91; }
+[data-testid="stDataFrame"], [data-testid="stDataEditor"] { background:white; border-radius:10px; border:1px solid #e3eaf0; padding:4px; }
+[data-testid="stExpander"] { background:white; border:1px solid #e3eaf0; border-radius:12px; overflow:hidden; }
+[data-testid="stAlert"] { border-radius:10px; }
+.stButton button, .stDownloadButton button, [data-testid="stFormSubmitButton"] button { border-radius:9px !important; min-height:40px; font-weight:650 !important; }
+.stButton button[kind="primary"], [data-testid="stFormSubmitButton"] button[kind="primary"] {background:#197da2 !important;border-color:#197da2 !important;color:white !important;}
+[data-baseweb="select"] > div, [data-baseweb="input"] > div, [data-baseweb="textarea"] textarea { border-radius:9px !important; }
+/* Report'as pagal seną HTML */
+.dg-chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 16px}.dg-chip{display:inline-flex;border-radius:8px;padding:6px 10px;background:#e7f0f5;color:#2b607c;font-size:11px;font-weight:690;}
+.dg-group-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:18px;}
+.dg-group-card {min-width:0;background:white;border:1px solid #e3eaf0;border-top:4px solid #197da2;border-radius:15px;padding:19px 21px;box-shadow:0 5px 13px #25475b07;}
+.dg-group-card.dg-zir {border-top-color:#c49144;}
+.dg-card-heading {display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:19px;font-weight:750;font-size:17px;}
+.dg-kpi-row {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));}
+.dg-kpi {min-width:0;padding:0 11px;border-right:1px solid #e3eaf0;}
+.dg-kpi:first-child{padding-left:0}.dg-kpi:last-child{border:0;padding-right:0}
+.dg-kpi-label{color:#647987;font-size:12px;white-space:nowrap;}
+.dg-kpi-value{font-size:24px;font-weight:760;color:#233b4b;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.dg-unit{font-size:11px;font-weight:450}.dg-plus{color:#16855f !important}.dg-minus{color:#b84d54 !important}.dg-zero{color:#7a8b98 !important}
+.dg-panel{background:white;border:1px solid #e3eaf0;border-radius:15px;padding:20px 22px;margin-bottom:18px;box-shadow:0 5px 13px #25475b07;}
+.dg-panel-title{font-weight:760;font-size:17px;color:#233b4b;}
+.dg-description{font-size:12px;color:#647987;margin:5px 0 18px}
+.dg-table {border-collapse:collapse;width:100%;text-align:left;font-size:13px;}
+.dg-table th{background:#f6f9fb;color:#547082;font-size:12px;font-weight:700;padding:12px 13px;}
+.dg-table td{color:#233b4b;border-bottom:1px solid #eaf0f4;padding:15px 13px;}
+.dg-table tbody tr:last-child td{border-bottom:0;}
+.dg-sign{font-size:18px;font-weight:740;font-variant-numeric:tabular-nums}.dg-help{background:#f2f8fc;color:#45677c;border:1px solid #d8e8f1;border-radius:10px;padding:12px 15px;margin:17px 0 0;font-size:12px;}
+.dg-softline{color:#718593;font-size:11px}.dg-chip-last{font-weight:650;border-radius:7px;background:#e7f0f5;padding:6px 10px;color:#2b607c;font-size:11px;}
+.dg-panel-header{display:flex;justify-content:space-between;align-items:start;gap:12px;}
+.dg-calendar-title{font-weight:760;font-size:15px;margin:14px 0 9px;color:#233b4b;}
+/* Pats Streamlit kontrolės skyriklis */
+.dg-top-heading {font-size:29px;font-weight:760;letter-spacing:-.6px;color:#233b4b;line-height:1.18;margin-bottom:5px;}
+.dg-top-description {font-size:13px;color:#647987;}
+.dg-small-head {font-size:12px;color:#547082;font-weight:660;}
+@media(max-width:920px){[data-testid="stMainBlockContainer"],.block-container{padding:1.5rem 1rem 2rem !important;}.dg-kpi-value{font-size:20px}.dg-group-card{padding:13px}.dg-panel{padding:15px}}
+@media(max-width:700px){.dg-group-grid{grid-template-columns:1fr}.dg-kpi-label{font-size:11px}[data-testid="stSidebar"]{width:245px!important}}
+.dg-staff-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;margin:14px 0 18px;}
+.dg-staff-card {background:white;border:1px solid #e0e8ee;border-radius:12px;padding:16px;min-width:0;}
+.dg-staff-title {display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:6px;font-size:15px;font-weight:750;}
+.dg-staff-table {width:100%;border-collapse:collapse;text-align:center;font-size:11px;}
+.dg-staff-table th{font-size:11px;color:#547082;padding:8px 5px;background:#f6f9fb;}
+.dg-staff-table th:first-child,.dg-staff-table td:first-child{text-align:left;}
+.dg-staff-table td{border-bottom:1px solid #e7eef3;padding:9px 5px;color:#233b4b;}
+.dg-staff-table tr:last-child td{border:0;}
+.dg-small{display:block;font-size:10px;color:#647987;margin-top:2px;font-weight:450;}
+@media(max-width:1100px){.dg-staff-grid{grid-template-columns:1fr}}

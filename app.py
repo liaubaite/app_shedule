@@ -18,15 +18,16 @@ import streamlit as st
 from saugykla import read_setting, restore_remote, save_remote, remote_configured
 
 from grafiko_rodymas import month_annotations, group_month_entries
+from vaizdas import report_cards, debt_panel, plan_panel, fixed_staff_cards
 from grafiko_logika import (DAYS, GROUPS, TARGET_PCT, WEEK_HOURS, MONTH_NAMES,
                             _scheduled_hours, get_holidays, calculate_month, selected_employee_report, suggest_hours_from_text,
                             cumulative_group_debts, employee_cumulative_view)
 
-st.set_page_config(page_title="Darbo grafikų skaičiuoklė", page_icon="📅", layout="wide")
-st.markdown("""<style>
-.block-container {padding-top: 1.6rem; max-width: 1350px;}
-div[data-testid='stMetricValue'] {font-size: 1.7rem;}
-</style>""", unsafe_allow_html=True)
+st.set_page_config(page_title="Darbo grafikų skaičiuoklė", page_icon="📅", layout="wide", initial_sidebar_state="expanded")
+# Spalvos, kortelės ir navigacija priderintos prie pirminės HTML demonstracijos.
+STYLE_FILE = Path(__file__).with_name("interface_stilius.css")
+st.markdown("<style>" + STYLE_FILE.read_text(encoding="utf-8") + "</style>",
+            unsafe_allow_html=True)
 
 # Tikroji darbo valandų ir skolų apskaita prasideda 2026-10-01.
 ACCOUNTING_START_YEAR, ACCOUNTING_START_MONTH = 2026, 10
@@ -204,7 +205,7 @@ def friendly_dataframe(records, key, height=330):
 
 
 def settings_page(employees, allocations, flags):
-    st.subheader("1. Pradiniai nustatymai")
+    st.markdown('<div class="dg-chips"><span class="dg-chip">Pradiniai duomenys</span><span class="dg-chip">🔒 Užrakinta pagal numatymą</span></div>', unsafe_allow_html=True)
     st.caption("100 % = 30 val. per savaitę. Darbo krūviai nusako mėnesio VALANDŲ NORMĄ, "
                "o įprasti 12 val. pamainų grafikai generuoja konkrečių mėnesio dienų valandas. "
                "Savaitinis grafikas neturi tiksliai sutapti su darbo krūvio procentais.")
@@ -222,21 +223,12 @@ def settings_page(employees, allocations, flags):
             st.session_state.fixed_schedule_edit_mode = False
             st.rerun()
     else:
-        st.success("🔒 Pastovūs grafikai užrakinti. Juos galima peržiūrėti, bet netyčia pakeisti neįmanoma.")
-        if st.button("✏️ Redaguoti pastovius grafikus", type="primary", key="unlock_fixed_schedules"):
+        st.info("🔒 Pastovūs grafikai užrakinti. Juos galima peržiūrėti, bet netyčia pakeisti neįmanoma.")
+        st.markdown(fixed_staff_cards(employees, allocations, flags, GROUPS, DAYS, _scheduled_hours),
+                    unsafe_allow_html=True)
+        if st.button("✏️ Redaguoti pastovius grafikus", type="secondary", key="unlock_fixed_schedules"):
             st.session_state.fixed_schedule_edit_mode = True
             st.rerun()
-        preview = []
-        for emp in employees:
-            for group in GROUPS:
-                eid = emp["id"]
-                d = {"Darbuotojas": emp["name"], "Grupė": group,
-                     "Krūvis (%)": float(allocations.get((eid, group), 0))}
-                for wd, label in enumerate(DAYS):
-                    d[f"{label} (val.)"] = round(_scheduled_hours(eid, group, wd, allocations, flags), 2)
-                d["Savaitė (val.)"] = round(sum(d[f"{label} (val.)"] for label in DAYS), 2)
-                preview.append(d)
-        st.dataframe(pd.DataFrame(preview), use_container_width=True, hide_index=True)
         st.caption("Parodytos visų trijų darbuotojų abiejų grupių valandos, tik pirmadienis–penktadienis. "
                    "Mėnesio pakeitimus registruokite kitame meniu; pastovaus grafiko jie nekeičia.")
         return
@@ -432,7 +424,7 @@ def event_delete_table(table, records, label, admin, year, month, cols):
 
 
 def changes_page(year, month, employees, allocations, absences, substitutions, corrections, notes, temporary_increases):
-    st.subheader("Mėnesio pakeitimai")
+    st.markdown('<div class="dg-chips"><span class="dg-chip">Tik pasirinkto mėnesio pakeitimai</span><span class="dg-chip">Galima ištrinti klaidingą įrašą</span></div>', unsafe_allow_html=True)
     st.caption("Pavadavimai, skolų dengimas, atostogos, liga ir papildomos valandos. Grafikai sudaromi pirmadieniui–penktadieniui; "
                "šeštadieniai ir sekmadieniai nerodomi, o šventės – laisvos visoms ir skolų nesukuria.")
     names = {e["id"]: e["name"] for e in employees}
@@ -828,96 +820,95 @@ def group_month_table(cells: list[dict], employees: list[dict]) -> pd.DataFrame:
 
 
 def dashboard_page(year, month, employees, alloc, flags, absences, substitutions, corrections, notes, temporary_increases):
+    """Vienos pasirinktos darbuotojos mėnuo pirmame plane; abi grupės – žemiau."""
     calc = calculate_month(year, month, employees, alloc, flags,
                            absences, substitutions, corrections,
                            temporary_increases=temporary_increases)
-    df, summary, groups, comparisons = build_views(calc, employees)
-    st.subheader(f"{year} m. {month:02d} mėn. grafikai ir rezultatai")
-    for w in calc["warnings"]:
-        st.warning(w)
-    actual = float(summary["Iš viso dirbta"].sum())
-    planned = float(summary["Iš viso planas"].sum())
-    a, b, c, d = st.columns(4)
-    a.metric("Bendras planas", f"{planned:.1f} val.")
-    b.metric("Faktiškai dirbta", f"{actual:.1f} val.", delta=f"{actual - planned:+.1f} val.")
-    c.metric("Žiogeliai", f"{groups.iloc[0]['Dirbta (val.)']:.1f} val.")
-    d.metric("Žirniukai", f"{groups.iloc[1]['Dirbta (val.)']:.1f} val.")
-
-    st.markdown("#### 1. Darbuotojų valandų suvestinė")
-    st.dataframe(summary, hide_index=True, use_container_width=True)
-    st.markdown("#### 2. Grupės užimtumas")
-    st.dataframe(groups, hide_index=True, use_container_width=True)
-    st.caption("„Balansui taikomas planas“ – pagal sutartą krūvį (100 % = 30 val./sav.) ir konkretaus mėnesio datas, "
-               "atėmus darbuotojos pastovias pamainas, kurios sutampa su šventėmis. "
-               "Šventės nei sukuria skolą, nei tariamą viršvalandį. Tai tarpusavio valandų, o ne darbo užmokesčio norma. "
-               "„Dirbta“ – pagal 12 val. pamainas ir mėnesio pakeitimus.")
-
-    st.markdown("#### 3. Bendras mėnesio grafikas pagal grupę")
-    st.caption("Pasirinkite grupę. Kalendoriuje vienoje vietoje matomos visų trijų darbuotojų "
-               "dienos, valandos, atostogos, pavadavimai ir kiti pakeitimai. "
-               "Šeštadieniai ir sekmadieniai nerodomi.")
+    df, summary, groups, _ = build_views(calc, employees)
+    st.markdown('<div class="dg-chips"><span class="dg-chip">Tik pirmadienis–penktadienis</span>'
+                '<span class="dg-chip">Atostogos ir pavadavimai kalendoriuje</span></div>',
+                unsafe_allow_html=True)
+    for warning in calc['warnings']:
+        st.warning(warning)
+    selected_id = st.session_state.get('report_selected_person_id', employees[0]['id'])
+    selected_name = next((e['name'] for e in employees if e['id'] == selected_id), employees[0]['name'])
+    st.markdown(f'<div class="dg-calendar-title">{escape(selected_name)} – '
+                f'{year} m. {MONTH_NAMES[month - 1].lower()}</div>', unsafe_allow_html=True)
+    st.caption('Šventinės dienos yra laisvos, o įvestos atostogos, liga, pavadavimai ir papildomos valandos matomi konkrečiomis datomis.')
+    part = df[df['employee_id'] == selected_id] if not df.empty else pd.DataFrame()
+    if not part.empty:
+        labels, _ = month_annotations(year, month, selected_id, employees, alloc,
+                                       absences, substitutions, corrections,
+                                       temporary_increases, notes, calc['holidays'])
+        render_month_calendar(part, year, month, labels)
+        view = part.pivot_table(index=['Data', 'Savaitės diena'], columns='group',
+                                values='actual', aggfunc='sum', fill_value=0).reset_index()
+        for group in GROUPS:
+            if group not in view.columns:
+                view[group] = 0.0
+        view['Iš viso'] = view[list(GROUPS)].sum(axis=1)
+        view['Pakeitimai'] = view['Data'].map(lambda iso: '; '.join(
+            entry['text'] for entry in labels.get(date.fromisoformat(iso), [])
+            if entry['kind'] != 'absence'))
+        with st.expander('Rodyti mėnesio dienų lentelę su pakeitimais'):
+            st.dataframe(view.round(2), hide_index=True, use_container_width=True, height=350)
+    st.markdown('<div class="dg-calendar-title">Bendras mėnesio grafikas pagal grupes</div>', unsafe_allow_html=True)
+    st.caption('Pasirinkite grupę: matysite visas tos grupės darbuotojas, valandas ir pavadavimus.')
     group_tabs = st.tabs(list(GROUPS))
     for tab, group in zip(group_tabs, GROUPS):
         with tab:
-            cells = group_month_entries(year, month, group, calc["daily"], employees,
+            cells = group_month_entries(year, month, group, calc['daily'], employees,
                                         absences, substitutions, corrections, temporary_increases,
-                                        calc["holiday_names"])
+                                        calc['holiday_names'])
             render_group_month_calendar(group, cells, year, month)
             group_frame = group_month_table(cells, employees)
-            with st.expander(f"{group}: visų dienų lentelė", expanded=False):
-                st.dataframe(group_frame, hide_index=True, use_container_width=True, height=380)
+            with st.expander(f'{group}: detalios mėnesio dienos'):
+                st.dataframe(group_frame, hide_index=True, use_container_width=True, height=360)
             excel_out = io.BytesIO()
-            with pd.ExcelWriter(excel_out, engine="openpyxl") as writer:
-                group_frame.to_excel(writer, index=False, sheet_name="Grupės mėnesio grafikas")
+            with pd.ExcelWriter(excel_out, engine='openpyxl') as writer:
+                group_frame.to_excel(writer, index=False, sheet_name='Grupės mėnesio grafikas')
                 ws = writer.book.active
-                ws.freeze_panes = "C2"
+                ws.freeze_panes = 'C2'
                 ws.auto_filter.ref = ws.dimensions
                 for column in ws.columns:
-                    max_len = max(len(str(cell.value or "")) for cell in column)
+                    max_len = max(len(str(cell.value or '')) for cell in column)
                     ws.column_dimensions[column[0].column_letter].width = min(58, max(13, max_len + 2))
-            st.download_button(f"📥 {group}: atsisiųsti mėnesio grafiką (Excel)",
+            st.download_button(f'↓ Atsisiųsti {group} mėnesio grafiką (.xlsx)',
                                data=excel_out.getvalue(),
                                file_name=f"{('ziogeliai' if group == GROUPS[0] else 'zirniukai')}_{year}_{month:02d}.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                               key=f"group_month_export_{group}_{year}_{month}")
-
-    st.markdown("#### 4. Darbuotojų mėnesio kalendoriai (tik Pr–Pn)")
-    st.caption("Visų trijų žmonių mėnesio grafikai rodomi viename puslapyje. "
-               "Atostogos, ligos, pavadavimai, skolų dengimas, papildomos valandos ir laikinas atostogų etatas "
-               "atsispindi konkrečiomis datomis. Valandos perskaičiuojamos automatiškai.")
-    for emp in employees:
-        part = df[df["employee_id"] == emp["id"]] if not df.empty else pd.DataFrame()
-        st.markdown(f"**{escape(emp['name'])}**")
-        if not part.empty:
-            labels, _ = month_annotations(year, month, emp["id"], employees, alloc,
+                               mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                               key=f'group_month_export_{group}_{year}_{month}')
+    with st.expander('Kitų dviejų darbuotojų mėnesio grafikai', expanded=False):
+        for emp in employees:
+            if emp['id'] == selected_id:
+                continue
+            part = df[df['employee_id'] == emp['id']] if not df.empty else pd.DataFrame()
+            if part.empty:
+                continue
+            st.markdown(f'**{escape(emp["name"])}**')
+            labels, _ = month_annotations(year, month, emp['id'], employees, alloc,
                                            absences, substitutions, corrections,
-                                           temporary_increases, notes, calc["holidays"])
+                                           temporary_increases, notes, calc['holidays'])
             render_month_calendar(part, year, month, labels)
-            view = part.pivot_table(index=["Data", "Savaitės diena"], columns="group",
-                                    values="actual", aggfunc="sum", fill_value=0).reset_index()
-            for g in GROUPS:
-                if g not in view.columns:
-                    view[g] = 0.0
-            view["Iš viso"] = view[list(GROUPS)].sum(axis=1)
-            view["Neatvykimas"] = part.groupby("Data")["absence"].first().values
-            view["Pakeitimai"] = view["Data"].map(lambda iso: "; ".join(
-                a["text"] for a in labels.get(date.fromisoformat(iso), [])
-                if a["kind"] != "absence"))
-            with st.expander(f"{emp['name']}: dienų lentelė"):
-                st.dataframe(view.round(2), hide_index=True, use_container_width=True, height=300)
-    month_notes = [n for n in notes if n["day"].startswith(f"{year}-{month:02d}")]
+    with st.expander('Visų darbuotojų valandų suvestinė ir grupių užimtumas', expanded=False):
+        st.dataframe(summary, hide_index=True, use_container_width=True)
+        st.dataframe(groups, hide_index=True, use_container_width=True)
+        st.caption('Valandų planas – pagal etato procentus ir mėnesio darbo dienas, įskaitant šventines išimtis. '
+                   'Dirbta – pagal konkrečias pamainas ir pakeitimus. Tai tarpusavio balansas, ne darbo užmokesčio norma.')
+    month_notes = [n for n in notes if n['day'].startswith(f'{year}-{month:02d}')]
     if month_notes:
-        with st.expander("Bendros mėnesio pastabos", expanded=True):
-            st.dataframe(pd.DataFrame([{"Data": n["day"], "Pastaba": n["note"]} for n in month_notes]),
-                         hide_index=True, use_container_width=True)
+        with st.expander('Bendros mėnesio pastabos'):
+            st.dataframe(pd.DataFrame([{'Data': n['day'], 'Pastaba': n['note']}
+                                       for n in month_notes]), hide_index=True, use_container_width=True)
 
 
 def reports_page(year, month, employees, alloc, flags, absences, substitutions, corrections, notes, temporary_increases):
     """Vienam darbuotojui: mėnesio grafikas + atskirai pernešami poriniai grupių likučiai."""
-    st.subheader(f"Mano valandų balansas — {year} m. {MONTH_NAMES[month - 1].lower()}")
-    selected_id = st.selectbox("Kieno ataskaitą rodyti?", [e["id"] for e in employees],
-                               format_func=lambda eid: next(e["name"] for e in employees if e["id"] == eid),
-                               key="report_selected_person_id")
+    # Darbuotoja pasirenkama viršutinėje juostoje – kaip HTML demonstracijoje.
+    selected_id = st.session_state.get("report_selected_person_id", employees[0]["id"])
+    st.markdown('<div class="dg-chips"><span class="dg-chip">Mėnesinė apskaita</span>'
+                '<span class="dg-chip">Atskirai pagal grupes</span>'
+                '<span class="dg-chip">Nuo 2026 m. spalio</span></div>', unsafe_allow_html=True)
     selected_name = next(e["name"] for e in employees if e["id"] == selected_id)
     carry = cumulative_group_debts(year, month, employees, alloc, flags, absences,
                                    substitutions, corrections,
@@ -928,42 +919,28 @@ def reports_page(year, month, employees, alloc, flags, absences, substitutions, 
     df, _, _, _ = build_views(calc, employees)
     selected, personal_rows, _ = selected_employee_report(calc["people"], selected_name)
     own_daily = df[df["employee_id"] == selected_id].copy() if not df.empty else pd.DataFrame()
-    st.caption("Skaičiuojama pagal kiekvieno žmogaus asmeninį planą. Šventės yra laisvos visoms ir "
-               "nesukuria nei skolų, nei viršvalandžių. Žiogelių ir Žirniukų likučiai atskiri. "
-               "Ankstesnių mėnesių likučiai perkeliami automatiškai.")
-    st.markdown(f"### {escape(selected_name)}")
-
-    cols = st.columns(2)
-    for col, item in zip(cols, personal_rows):
-        group = item["Grupė"]
-        unassigned = carry["closing_unmatched"].get((group, selected_id), 0.0)
-        with col:
-            st.markdown(f"**{group}**")
-            st.metric("Šio mėnesio asmeninis balansas", f"{item['Balansas (val.)']:+.1f} val.")
-            st.caption(f"Planas {item['Planuota (val.)']:g} val. · "
-                       f"Dirbta {item['Dirbta (val.)']:g} val. · "
-                       f"Pateisintas neatvykimas {item['Pateisinti neatvykimai (val.)']:g} val.")
-            if item.get("Laikino padidinimo norma (val.)", 0) > 0.001:
-                st.caption(f"Atostogų laikotarpio papildoma norma "
-                           f"{item['Laikino padidinimo norma (val.)']:g} val.; "
-                           f"į skolų balansą neįtraukta "
-                           f"{item['Neįtraukta į skolą (val.)']:g} faktiškai pridėtų val.")
-            if abs(unassigned) > 0.005:
-                st.caption(f"Nepriskirtas sukauptas likutis: {unassigned:+.1f} val. "
-                           "(kuriam kolegai priklauso, dar nepatvirtinta).")
-
-    st.markdown("#### Tarpusavio valandų likutis (iki pasirinkto mėnesio pabaigos)")
-    st.caption("**+** kolega skolingas man; **−** aš skolingas kolegai; **0** atsiskaityta. "
-               "Lentelė rodo likutį po šio mėnesio, įskaitant ankstesnius mėnesius.")
+    # Senojo HTML demonstracinio vaizdo kortelės su realiais Python rezultatais.
+    st.markdown(report_cards(personal_rows, alloc, selected_id), unsafe_allow_html=True)
     relations = employee_cumulative_view(carry, selected_id, employees)
     view = pd.DataFrame([{
         "Kolega": r["Kolega"],
         "Žiogeliai (val.)": r["Žiogeliai: Likutis"],
         "Žirniukai (val.)": r["Žirniukai: Likutis"],
     } for r in relations])
-    st.dataframe(view.style.format({"Žiogeliai (val.)": "{:+.1f}",
-                                     "Žirniukai (val.)": "{:+.1f}"}),
-                 hide_index=True, use_container_width=True)
+    st.markdown(debt_panel(relations, year, MONTH_NAMES[month - 1].lower()),
+                unsafe_allow_html=True)
+    st.markdown(plan_panel(personal_rows), unsafe_allow_html=True)
+    # Nepriskirti likučiai nenuslepiami – svarbu nesukurti neegzistuojančių skolų.
+    for item in personal_rows:
+        group = item["Grupė"]
+        unassigned = carry["closing_unmatched"].get((group, selected_id), 0.0)
+        if abs(unassigned) > 0.005:
+            st.info(f"{group}: {unassigned:+.1f} val. likutis dar nepriskirtas konkrečiai kolegei.")
+        if item.get("Laikino padidinimo norma (val.)", 0) > 0.001:
+            st.caption(f"{group}: atostogų laikotarpio papildoma norma "
+                       f"{item['Laikino padidinimo norma (val.)']:g} val.; "
+                       f"į skolų balansą neįtraukta "
+                       f"{item['Neįtraukta į skolą (val.)']:g} faktiškai pridėtų val.")
     with st.expander("Kaip likutis pasikeitė šį mėnesį?", expanded=False):
         movements = [{"Kolega": r["Kolega"],
                       "Žiogeliai: iš praeito mėn.": r["Žiogeliai: Ankstesnis likutis"],
@@ -1059,42 +1036,71 @@ def main():
     initialize_storage_once()
     role, secured = authorized_role()
     admin = role == "admin"
-    st.title("📅 Darbo grafikų skaičiuoklė")
-    st.caption("Žiogeliai • Žirniukai • 3 darbuotojai • 100 % = 30 val./sav. • Grupėms po 200 %")
-    if not secured:
-        st.warning("Vietinis demonstracinis režimas: prieigos slaptažodžiai nenustatyti. "
-                   "Neskelbkite programos internete be autentifikacijos.")
-    else:
-        st.sidebar.write("Prisijungta: " + ("redagavimas" if admin else "tik peržiūra"))
-        if st.sidebar.button("Atsijungti"):
-            st.session_state.authenticated = ""
-            st.rerun()
-    year = st.sidebar.number_input("Metai", 2020, 2100, value=date.today().year, step=1)
-    month = st.sidebar.selectbox("Mėnuo", range(1, 13), index=date.today().month - 1,
-                                 format_func=lambda m: MONTH_NAMES[m-1])
-    if (int(year), int(month)) < (ACCOUNTING_START_YEAR, ACCOUNTING_START_MONTH):
-        st.info("Apskaita pradedama 2026 m. spalį. Ankstesnių skolų nėra (0 val.).")
-        st.stop()
-    employees, allocations, flags, absences, substitutions, corrections, notes, temporary_increases = load_state()
-    views = ["Mėnesio grafikai", "Mėnesio ataskaitos"]
+
+    st.sidebar.markdown('''<div class="dg-brand">▦ Darbo grafikų<br>skaičiuoklė
+    <small>Žiogeliai · Žirniukai</small></div>''', unsafe_allow_html=True)
+    # Tokia pati skyrių tvarka kaip HTML peržiūroje, o ne techninis Streamlit meniu.
+    names = ["▤  Mano ataskaita", "▦  Mėnesio grafikas"]
     if admin:
-        views += ["Mėnesio pakeitimai", "Pradiniai grafikai"]
-    tab = st.sidebar.radio("Meniu", views)
-    if tab == "Pradiniai grafikai":
+        names += ["✎  Mėnesio pakeitimai", "⚙  Pastovūs grafikai"]
+    tab = st.sidebar.radio("Meniu", names, label_visibility="collapsed", key="main_nav")
+    selected_page = ("report" if "Mano ataskaita" in tab else
+                     "calendar" if "Mėnesio grafikas" in tab else
+                     "changes" if "Mėnesio pakeitimai" in tab else "settings")
+    st.sidebar.markdown('''<div class="dg-side-foot">Apskaita nuo 2026-10-01<br>
+    100 % = 30 val./sav.<br><br>Prisijungta: ''' + ("redaktorė" if admin else "peržiūra") + '''</div>''', unsafe_allow_html=True)
+    if secured and st.sidebar.button("Atsijungti", key="logout"):
+        st.session_state.authenticated = ""
+        st.rerun()
+
+    employees, allocations, flags, absences, substitutions, corrections, notes, temporary_increases = load_state()
+    headings = {
+        "report": ("Mano valandų balansas", "Mėnesio planas, faktiškai dirbta ir skolos tarp konkrečių darbuotojų."),
+        "calendar": ("Mėnesio grafikas", "Darbuotojų ir grupių pamainos, neatvykimai bei visi pakeitimai."),
+        "changes": ("Mėnesio pakeitimai", "Atostogos, liga, pavadavimai, skolų grąžinimas ir papildomos valandos."),
+        "settings": ("Pastovūs grafikai", "Trijų darbuotojų krūviai ir pastovios darbo dienos."),
+    }
+    # Mėnuo ir asmuo viršuje dešinėje – vietoj atskiro painaus šoninio pasirinkimo.
+    heading, explanation = headings[selected_page]
+    title_col, month_col, person_col = st.columns([4.1, 1.55, 1.55], vertical_alignment="bottom")
+    with title_col:
+        st.markdown(f'<div class="dg-top-heading">{escape(heading)}</div>'
+                    f'<div class="dg-top-description">{escape(explanation)}</div>', unsafe_allow_html=True)
+    with month_col:
+        years = range(ACCOUNTING_START_YEAR, 2037)
+        months = [(y, m) for y in years for m in range(1, 13)
+                  if (y, m) >= (ACCOUNTING_START_YEAR, ACCOUNTING_START_MONTH)]
+        wanted = (date.today().year, date.today().month)
+        default_month = wanted if wanted in months else (ACCOUNTING_START_YEAR, ACCOUNTING_START_MONTH)
+        ym = st.selectbox("Mėnuo", months, index=months.index(default_month),
+                          format_func=lambda pair: f"{pair[0]} m. {MONTH_NAMES[pair[1]-1].lower()}",
+                          key="selected_year_month")
+        year, month = ym
+    with person_col:
+        if selected_page in ("report", "calendar"):
+            st.selectbox("Darbuotoja", [e["id"] for e in employees],
+                         format_func=lambda eid: next(e["name"] for e in employees if e["id"] == eid),
+                         key="report_selected_person_id")
+        else:
+            st.markdown('<div style="height:67px"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:11px"></div>', unsafe_allow_html=True)
+    if not secured:
+        st.warning("Vietinis demonstracinis režimas be slaptažodžių – neskelbkite viešai.")
+    if selected_page == "settings":
         settings_page(employees, allocations, flags)
-    elif tab == "Mėnesio pakeitimai":
-        changes_page(year, month, employees, allocations, absences, substitutions, corrections, notes, temporary_increases)
-    elif tab == "Mėnesio ataskaitos":
-        reports_page(year, month, employees, allocations, flags, absences, substitutions, corrections, notes, temporary_increases)
+    elif selected_page == "changes":
+        changes_page(year, month, employees, allocations, absences, substitutions,
+                     corrections, notes, temporary_increases)
+    elif selected_page == "report":
+        reports_page(year, month, employees, allocations, flags, absences,
+                     substitutions, corrections, notes, temporary_increases)
     else:
-        dashboard_page(year, month, employees, allocations, flags, absences, substitutions, corrections, notes, temporary_increases)
-    st.sidebar.divider()
+        dashboard_page(year, month, employees, allocations, flags, absences,
+                       substitutions, corrections, notes, temporary_increases)
     if remote_configured():
-        st.sidebar.caption("Duomenys saugomi patvarioje Supabase saugykloje (sinchronizuota SQLite kopija).")
+        st.sidebar.caption("● Duomenys saugomi Supabase")
     else:
-        st.sidebar.error("Šiame serveryje nustatyta tik vietinė SQLite saugykla. "
-                         "Streamlit Community Cloud ji gali būti ištrinta po perkrovimo. "
-                         "Prieš naudojimą sukonfigūruokite Supabase.")
+        st.sidebar.error("⚠ Duomenys tik vietinėje SQLite saugykloje – po perkrovimo gali dingti. Prijunkite Supabase.")
 
 
 if __name__ == "__main__":
